@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
@@ -8,25 +8,23 @@ import { Colors, Spacing, FontSize } from '../../src/components/theme';
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
 
-  const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out', style: 'destructive', onPress: async () => {
-          await logout();
-          if (Platform.OS === 'web') {
-            // On web, a hard reload is the most reliable way to clear state and redirect
-            window.location.href = '/';
-          } else {
-            router.replace('/(auth)/index');
-          }
-        }
-      },
-    ]);
+  const handleLogout = async () => {
+    const confirmed = Platform.OS === 'web'
+      ? window.confirm('Are you sure you want to log out?')
+      : true; // on mobile we'll use Alert separately if needed
+
+    if (!confirmed) return;
+    await logout();
+    if (Platform.OS === 'web') {
+      window.location.href = '/';
+    } else {
+      router.replace('/(auth)/index');
+    }
   };
 
   const xpToNext = (user?.accountLevel ?? 1) * 200;
   const curXp = ((user?.accountLevel ?? 1) - 1) * 200;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
