@@ -55,19 +55,17 @@ export default function TeamBuilderScreen() {
 
   // ── Step 1: Pick units ──────────────────────────────────────────────────────
   const togglePick = (unit: UnitDef) => {
-    // If already picked, remove it
-    const existingIdx = picked.findIndex(p => p?.id === unit.id);
-    if (existingIdx !== -1) {
-      const next = [...picked];
-      next[existingIdx] = null;
-      setPicked(next);
-      return;
-    }
-    // Fill the first empty slot
+    // Always fill the first empty slot — duplicates allowed
     const emptyIdx = picked.findIndex(p => p === null);
-    if (emptyIdx === -1) return; // full
+    if (emptyIdx === -1) return; // all 4 slots full
     const next = [...picked];
     next[emptyIdx] = unit;
+    setPicked(next);
+  };
+
+  const removeFromSlot = (slotIdx: number) => {
+    const next = [...picked];
+    next[slotIdx] = null;
     setPicked(next);
   };
 
@@ -177,7 +175,7 @@ export default function TeamBuilderScreen() {
               <TouchableOpacity
                 key={i}
                 style={[s.pill, u ? s.pillFilled : s.pillEmpty]}
-                onPress={() => { if (u) togglePick(u); }}
+                onPress={() => { if (u) removeFromSlot(i); }}
               >
                 <Text style={[s.pillTxt, !u && s.pillTxtEmpty]}>{u ? u.name : (i + 1) + ''}</Text>
                 {u && <Text style={s.pillX}>×</Text>}
@@ -188,13 +186,11 @@ export default function TeamBuilderScreen() {
           {/* Unit roster */}
           <View style={s.roster}>
             {allUnits.map(unit => {
-              const pickedIdx = picked.findIndex(p => p?.id === unit.id);
-              const isPicked  = pickedIdx !== -1;
-              const isFull    = pickedCount >= TEAM_SIZE && !isPicked;
+              const isFull = pickedCount >= TEAM_SIZE;
               return (
                 <TouchableOpacity
                   key={unit.id}
-                  style={[s.unitCard, isPicked && s.unitCardSel, isFull && s.unitCardDim]}
+                  style={[s.unitCard, picked.some(p => p?.id === unit.id) && s.unitCardSel, isFull && s.unitCardDim]}
                   onPress={() => { if (!isFull) togglePick(unit); }}
                   disabled={isFull}
                 >
@@ -204,11 +200,14 @@ export default function TeamBuilderScreen() {
                       <Text style={s.unitStat}>HP {unit.maxHealth}  ·  MV {unit.movementRange}</Text>
                       <Text style={s.unitAbil}>{unit.abilities.map(a => a.replace(/_/g, ' ')).join(' · ')}</Text>
                     </View>
-                    {isPicked && (
-                      <View style={s.checkBadge}>
-                        <Text style={s.checkTxt}>{pickedIdx + 1}</Text>
-                      </View>
-                    )}
+                    {pickedCount > 0 && (() => {
+                      const count = picked.filter(p => p?.id === unit.id).length;
+                      return count > 0 ? (
+                        <View style={s.checkBadge}>
+                          <Text style={s.checkTxt}>×{count}</Text>
+                        </View>
+                      ) : null;
+                    })()}
                   </View>
                 </TouchableOpacity>
               );
