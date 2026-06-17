@@ -101,3 +101,4 @@ export async function declineChallenge(challengeId: string): Promise<void> { awa
 export interface ChallengeItem { id: string; fromUserId: string; fromUsername: string; teamId: string; status: string; createdAt: string; expiresAt?: string; }
 export interface SentChallengeItem { id: string; toUserId: string; toUsername: string; teamId: string; status: string; matchId: string | null; createdAt: string; }
 export async function getChallenges(): Promise<{ challenges: ChallengeItem[]; sent: SentChallengeItem[] }> { return apiFetch("/challenges"); }
+
