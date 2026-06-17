@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
@@ -14,7 +14,12 @@ export default function ProfileScreen() {
       {
         text: 'Log Out', style: 'destructive', onPress: async () => {
           await logout();
-          router.replace('/(auth)/index');
+          if (Platform.OS === 'web') {
+            // On web, a hard reload is the most reliable way to clear state and redirect
+            window.location.href = '/';
+          } else {
+            router.replace('/(auth)/index');
+          }
         }
       },
     ]);
