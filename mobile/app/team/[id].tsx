@@ -1,250 +1,359 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { getUnits, getTeams, createTeam, updateTeam, UnitDef } from '../../src/api/client';
 import { Button, ErrorMessage } from '../../src/components/ui';
 import { Colors, Spacing, FontSize, Radius } from '../../src/components/theme';
 
-const TEAM_SIZE = 4;
-const BOARD_SIZE = 8;
-const TILE_SIZE = 36;
+const TEAM_SIZE  = 4;
+const BOARD_COLS = 8;
+const BOARD_ROWS = 8;
+const TILE_SIZE  = 40;
 
 interface Pos { x: number; y: number }
-const DEFAULT_PLACEMENT: Pos[] = [{ x: 1, y: 1 }, { x: 1, y: 3 }, { x: 1, y: 5 }, { x: 1, y: 7 }];
+
+// Default starting positions on the left half
+const DEFAULT_POSITIONS: Pos[] = [
+  { x: 0, y: 1 }, { x: 0, y: 3 }, { x: 0, y: 5 }, { x: 0, y: 7 },
+];
+
+type Step = 'pick' | 'place';
 
 export default function TeamBuilderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
-  const [units, setUnits] = useState<UnitDef[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [teamName, setTeamName] = useState('');
-  const [placement, setPlacement] = useState<(Pos | null)[]>([null, null, null, null]);
-  const [activeSlot, setActiveSlot] = useState<number>(0); // which slot we're editing
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const [step,        setStep]        = useState<Step>('pick');
+  const [allUnits,    setAllUnits]    = useState<UnitDef[]>([]);
+  const [teamName,    setTeamName]    = useState('');
+  const [picked,      setPicked]      = useState<(UnitDef | null)[]>([null, null, null, null]);
+  const [positions,   setPositions]   = useState<(Pos | null)[]>([null, null, null, null]);
+  const [activeSlot,  setActiveSlot]  = useState<number>(0); // which unit is being placed
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
 
   useEffect(() => {
-    void getUnits().then(({ units: u }) => setUnits(u)).catch(() => {});
+    void getUnits().then(({ units }) => setAllUnits(units)).catch(() => {});
     if (!isNew) {
       void getTeams().then(({ teams }) => {
-        const t = teams.find((t) => t.id === id);
-        if (t) {
-          setTeamName(t.name);
-          setSelectedIds([...t.unitIds]);
-          if (t.placement && t.placement.length === 4) {
-            setPlacement([...t.placement]);
-          } else {
-            setPlacement([...DEFAULT_PLACEMENT]);
-          }
-          setActiveSlot(-1); // no slot active when editing existing team
-        }
+        const t = teams.find(t => t.id === id);
+        if (!t) return;
+        setTeamName(t.name);
+        // Load existing unit definitions once allUnits is populated
+        setLoading(true);
+        getUnits().then(({ units }) => {
+          const loaded = t.unitIds.map(uid => units.find(u => u.id === uid) ?? null);
+          setPicked(loaded);
+          setPositions(DEFAULT_POSITIONS.map((p, i) => loaded[i] ? p : null));
+          setStep('place');
+          setLoading(false);
+        }).catch(() => setLoading(false));
       }).catch(() => {});
     }
   }, [id, isNew]);
 
-  const selectUnitForSlot = (unitId: string) => {
-    if (activeSlot < 0 || activeSlot >= TEAM_SIZE) return;
-    const next = [...selectedIds];
-    next[activeSlot] = unitId;
-    setSelectedIds(next);
-    // Auto-advance to next empty slot
-    const nextEmpty = next.findIndex((s, i) => i > activeSlot && !s);
-    if (nextEmpty !== -1) setActiveSlot(nextEmpty);
-    else setActiveSlot(-1);
+  // ── Step 1: Pick units ──────────────────────────────────────────────────────
+  const togglePick = (unit: UnitDef) => {
+    // If already picked, remove it
+    const existingIdx = picked.findIndex(p => p?.id === unit.id);
+    if (existingIdx !== -1) {
+      const next = [...picked];
+      next[existingIdx] = null;
+      setPicked(next);
+      return;
+    }
+    // Fill the first empty slot
+    const emptyIdx = picked.findIndex(p => p === null);
+    if (emptyIdx === -1) return; // full
+    const next = [...picked];
+    next[emptyIdx] = unit;
+    setPicked(next);
   };
 
-  const handlePlacementTile = (x: number, y: number) => {
+  const pickedCount = picked.filter(Boolean).length;
+  const canProceed  = pickedCount === TEAM_SIZE && teamName.trim().length > 0;
+
+  const goToPlace = () => {
+    if (!canProceed) return;
+    // Set default positions for all picked units
+    setPositions([...DEFAULT_POSITIONS]);
+    setActiveSlot(0);
+    setStep('place');
+  };
+
+  // ── Step 2: Place units ─────────────────────────────────────────────────────
+  const handleTileTap = (x: number, y: number) => {
     if (x > 3) return; // left half only
-    if (activeSlot < 0 || activeSlot >= TEAM_SIZE) return;
-    if (!selectedIds[activeSlot]) return; // must have unit selected for this slot
 
-    // Remove any existing placement at this tile
-    const tileSlot = placement.findIndex(p => p && p.x === x && p.y === y);
-    if (tileSlot === activeSlot) {
-      // Clicking own placed tile — remove it
-      const next = [...placement]; next[activeSlot] = null; setPlacement(next); return;
+    const clickedSlot = positions.findIndex(p => p && p.x === x && p.y === y);
+
+    if (clickedSlot !== -1 && clickedSlot !== activeSlot) {
+      // Tap another unit's tile — switch active slot to it
+      setActiveSlot(clickedSlot);
+      return;
     }
-    if (tileSlot !== -1) {
-      // Tile taken by another slot — swap
-      const next = [...placement];
-      const tmp = next[activeSlot];
-      next[activeSlot] = next[tileSlot];
-      next[tileSlot] = tmp;
-      setPlacement(next); return;
+
+    if (clickedSlot === activeSlot) {
+      // Tap active unit's own tile — deselect (remove placement)
+      const next = [...positions];
+      next[activeSlot] = null;
+      setPositions(next);
+      return;
     }
-    // Place on empty tile
-    const next = [...placement]; next[activeSlot] = { x, y }; setPlacement(next);
+
+    // Empty tile — place active unit here
+    const next = [...positions];
+    next[activeSlot] = { x, y };
+    setPositions(next);
+
+    // Auto-advance to next unplaced unit
+    const nextUnplaced = positions.findIndex((p, i) => i !== activeSlot && p === null);
+    if (nextUnplaced !== -1) setActiveSlot(nextUnplaced);
   };
 
-  const allPlaced = placement.every(p => p !== null);
-  const allSelected = selectedIds.length === TEAM_SIZE && selectedIds.every(Boolean);
+  const allPlaced = positions.every(p => p !== null);
 
   const save = async () => {
-    if (!teamName.trim()) { setError('Enter a team name'); return; }
-    if (!allSelected) { setError('Select all 4 units'); return; }
-    if (!allPlaced) { setError('Place all 4 units on the board'); return; }
+    if (!teamName.trim())  { setError('Enter a team name'); return; }
+    if (pickedCount < TEAM_SIZE) { setError('Pick all 4 units'); return; }
+    if (!allPlaced)        { setError('Place all 4 units on the board'); return; }
+
     setLoading(true); setError(null);
     try {
-      const p = placement as Pos[];
-      if (isNew) await createTeam(teamName.trim(), selectedIds, p);
-      else await updateTeam(id, teamName.trim(), selectedIds, p);
+      const unitIds = picked.map(p => p!.id);
+      const pos     = positions as Pos[];
+      if (isNew) await createTeam(teamName.trim(), unitIds, pos);
+      else       await updateTeam(id, teamName.trim(), unitIds, pos);
       router.back();
-    } catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
-    finally { setLoading(false); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally { setLoading(false); }
   };
 
+  const handleBack = () => {
+    if (step === 'place') { setStep('pick'); return; }
+    router.back();
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}><Text style={styles.back}>Back</Text></TouchableOpacity>
-        <Text style={styles.title}>{isNew ? 'New Team' : 'Edit Team'}</Text>
-        <Button title={isNew ? 'Create' : 'Save'} onPress={save} loading={loading} disabled={!allSelected || !allPlaced || !teamName.trim()} size="sm" />
+    <SafeAreaView style={s.container}>
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={handleBack}>
+          <Text style={s.back}>{step === 'place' ? '← Units' : '← Back'}</Text>
+        </TouchableOpacity>
+        <Text style={s.title}>{isNew ? 'New Team' : 'Edit Team'}</Text>
+        {step === 'place'
+          ? <Button title={isNew ? 'Create' : 'Save'} onPress={save} loading={loading} disabled={!allPlaced} size="sm" />
+          : <Button title="Next →" onPress={goToPlace} disabled={!canProceed} size="sm" />
+        }
       </View>
 
-      <View style={styles.nameRow}>
-        <TextInput style={styles.nameInput} value={teamName} onChangeText={setTeamName} placeholder="Team name..." placeholderTextColor={Colors.textMuted} />
+      {/* Team name */}
+      <View style={s.nameRow}>
+        <TextInput
+          style={s.nameInput}
+          value={teamName}
+          onChangeText={setTeamName}
+          placeholder="Team name..."
+          placeholderTextColor={Colors.textMuted}
+        />
       </View>
 
       {error && <ErrorMessage message={error} />}
 
-      <Text style={styles.sectionLabel}>SLOTS — tap a slot to edit it</Text>
+      {step === 'pick' ? (
+        // ── STEP 1: Pick 4 units ──────────────────────────────────────────────
+        <ScrollView contentContainerStyle={s.pickContent}>
+          <Text style={s.stepHint}>
+            Pick {TEAM_SIZE - pickedCount > 0 ? TEAM_SIZE - pickedCount + ' more' : 'done — tap Next'} · {pickedCount}/{TEAM_SIZE} selected
+          </Text>
 
-      {/* Slot selector */}
-      <View style={styles.slots}>
-        {Array.from({ length: TEAM_SIZE }).map((_, i) => {
-          const unit = units.find(u => u.id === selectedIds[i]);
-          const pos = placement[i];
-          const isActive = activeSlot === i;
-          return (
-            <TouchableOpacity key={i} style={[styles.slot, isActive && styles.slotActive, unit && styles.slotFilled]} onPress={() => setActiveSlot(i)}>
-              <Text style={styles.slotNum}>{i + 1}</Text>
-              <Text style={styles.slotUnit} numberOfLines={1}>{unit ? unit.name : '—'}</Text>
-              <Text style={styles.slotPos}>{pos ? '(' + pos.x + ',' + pos.y + ')' : 'unplaced'}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {activeSlot >= 0 && (
-        <Text style={styles.instruction}>
-          {!selectedIds[activeSlot]
-            ? 'Pick a unit for slot ' + (activeSlot + 1) + ':'
-            : !placement[activeSlot]
-            ? 'Tap left half of board to place ' + (units.find(u => u.id === selectedIds[activeSlot])?.name ?? '') + ':'
-            : 'Tap board to reposition, or pick a different unit:'}
-        </Text>
-      )}
-
-      <ScrollView style={styles.content}>
-        {/* Board */}
-        <View style={styles.boardWrap}>
-          <View style={styles.board}>
-            {Array.from({ length: BOARD_SIZE }).map((_, y) => (
-              <View key={y} style={styles.boardRow}>
-                {Array.from({ length: BOARD_SIZE }).map((_, x) => {
-                  const unitIdx = placement.findIndex(p => p && p.x === x && p.y === y);
-                  const isLeft = x <= 3;
-                  const isThisSlot = unitIdx === activeSlot;
-                  const isOtherSlot = unitIdx !== -1 && unitIdx !== activeSlot;
-                  const isAvail = isLeft && unitIdx === -1 && activeSlot >= 0 && !!selectedIds[activeSlot];
-                  const slotUnit = unitIdx !== -1 ? units.find(u => u.id === selectedIds[unitIdx]) : null;
-                  return (
-                    <TouchableOpacity
-                      key={x}
-                      style={[
-                        styles.tile,
-                        isThisSlot ? styles.tileActive :
-                        isOtherSlot ? styles.tileFilled :
-                        isAvail ? styles.tileAvail :
-                        isLeft ? ((x + y) % 2 === 0 ? styles.tileL : styles.tileD) :
-                        styles.tileDisabled
-                      ]}
-                      onPress={() => handlePlacementTile(x, y)}
-                      disabled={!isLeft || activeSlot < 0}
-                    >
-                      {unitIdx !== -1 && (
-                        <View style={[styles.unitMark, { borderColor: unitIdx === activeSlot ? '#fff' : Colors.primary }]}>
-                          <Text style={styles.unitLbl}>{slotUnit?.name.charAt(0) ?? '?'}</Text>
-                          <Text style={styles.unitNum}>{unitIdx + 1}</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+          {/* Selected unit pills */}
+          <View style={s.pills}>
+            {picked.map((u, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[s.pill, u ? s.pillFilled : s.pillEmpty]}
+                onPress={() => { if (u) togglePick(u); }}
+              >
+                <Text style={[s.pillTxt, !u && s.pillTxtEmpty]}>{u ? u.name : (i + 1) + ''}</Text>
+                {u && <Text style={s.pillX}>×</Text>}
+              </TouchableOpacity>
             ))}
           </View>
-          <Text style={styles.boardHint}>← Place here  |  Right side disabled →</Text>
-        </View>
 
-        {/* Unit roster */}
-        {activeSlot >= 0 && (
-          <>
-            <Text style={styles.sectionLabel}>CHOOSE UNIT FOR SLOT {activeSlot + 1}:</Text>
-            <View style={styles.roster}>
-              {units.map(unit => {
-                const isSelected = selectedIds[activeSlot] === unit.id;
-                const usedInOtherSlot = selectedIds.some((sid, i) => i !== activeSlot && sid === unit.id);
-                return (
-                  <TouchableOpacity
-                    key={unit.id}
-                    style={[styles.unitCard, isSelected && styles.unitCardSel]}
-                    onPress={() => selectUnitForSlot(unit.id)}
-                  >
-                    <Text style={styles.unitName}>{unit.name}</Text>
-                    <Text style={styles.unitStat}>HP {unit.maxHealth}  MV {unit.movementRange}</Text>
-                    {isSelected && <View style={styles.checkBadge}><Text style={styles.checkText}>✓</Text></View>}
-                    {usedInOtherSlot && !isSelected && <View style={styles.dupBadge}><Text style={styles.dupText}>+</Text></View>}
-                  </TouchableOpacity>
-                );
-              })}
+          {/* Unit roster */}
+          <View style={s.roster}>
+            {allUnits.map(unit => {
+              const pickedIdx = picked.findIndex(p => p?.id === unit.id);
+              const isPicked  = pickedIdx !== -1;
+              const isFull    = pickedCount >= TEAM_SIZE && !isPicked;
+              return (
+                <TouchableOpacity
+                  key={unit.id}
+                  style={[s.unitCard, isPicked && s.unitCardSel, isFull && s.unitCardDim]}
+                  onPress={() => { if (!isFull) togglePick(unit); }}
+                  disabled={isFull}
+                >
+                  <View style={s.unitCardRow}>
+                    <View>
+                      <Text style={s.unitName}>{unit.name}</Text>
+                      <Text style={s.unitStat}>HP {unit.maxHealth}  ·  MV {unit.movementRange}</Text>
+                      <Text style={s.unitAbil}>{unit.abilities.map(a => a.replace(/_/g, ' ')).join(' · ')}</Text>
+                    </View>
+                    {isPicked && (
+                      <View style={s.checkBadge}>
+                        <Text style={s.checkTxt}>{pickedIdx + 1}</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      ) : (
+        // ── STEP 2: Place units ───────────────────────────────────────────────
+        <ScrollView contentContainerStyle={s.placeContent}>
+          <Text style={s.stepHint}>
+            Tap a tile on the left half to place your units. Tap a unit to select it.
+          </Text>
+
+          {/* Active unit indicator */}
+          <View style={s.activeRow}>
+            {picked.map((u, i) => {
+              const placed = positions[i] !== null;
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[s.activeChip, i === activeSlot && s.activeChipOn, placed && s.activeChipPlaced]}
+                  onPress={() => setActiveSlot(i)}
+                >
+                  <Text style={s.activeChipNum}>{i + 1}</Text>
+                  <Text style={s.activeChipName} numberOfLines={1}>{u?.name ?? '—'}</Text>
+                  {placed && <Text style={s.activeChipCheck}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Board */}
+          <View style={s.boardWrap}>
+            <View style={s.board}>
+              {Array.from({ length: BOARD_ROWS }).map((_, y) => (
+                <View key={y} style={s.boardRow}>
+                  {Array.from({ length: BOARD_COLS }).map((_, x) => {
+                    const slotHere = positions.findIndex(p => p && p.x === x && p.y === y);
+                    const isLeft   = x <= 3;
+                    const isActive = slotHere === activeSlot;
+                    const isOther  = slotHere !== -1 && slotHere !== activeSlot;
+                    const isAvail  = isLeft && slotHere === -1;
+
+                    let tileStyle = isLeft
+                      ? (isAvail ? ((x + y) % 2 === 0 ? s.tileL : s.tileD) : s.tileL)
+                      : s.tileDisabled;
+                    if (isActive) tileStyle = s.tileActive;
+                    else if (isOther) tileStyle = s.tileOther;
+
+                    return (
+                      <TouchableOpacity
+                        key={x}
+                        style={[s.tile, tileStyle]}
+                        onPress={() => handleTileTap(x, y)}
+                        disabled={!isLeft}
+                        activeOpacity={0.7}
+                      >
+                        {slotHere !== -1 && (
+                          <View style={[s.unitDot, { borderColor: slotHere === activeSlot ? '#fff' : Colors.primary }]}>
+                            <Text style={s.unitDotTxt}>{picked[slotHere]?.name.charAt(0) ?? '?'}</Text>
+                            <Text style={s.unitDotNum}>{slotHere + 1}</Text>
+                          </View>
+                        )}
+                        {isAvail && slotHere === -1 && (
+                          <View style={s.availDot} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
             </View>
-          </>
-        )}
-      </ScrollView>
+            <Text style={s.boardHint}>Your half ←  |  → Enemy half (locked)</Text>
+          </View>
+
+          {/* Active unit info */}
+          {picked[activeSlot] && (
+            <View style={s.activeInfo}>
+              <Text style={s.activeInfoName}>Placing: <Text style={{ color: Colors.primary }}>{picked[activeSlot]!.name}</Text></Text>
+              <Text style={s.activeInfoSub}>
+                {positions[activeSlot]
+                  ? 'Placed at (' + positions[activeSlot]!.x + ', ' + positions[activeSlot]!.y + ') — tap to move'
+                  : 'Tap a tile on the left to place'}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Spacing.md },
   back: { color: Colors.primary, fontSize: FontSize.md },
   title: { color: Colors.textPrimary, fontSize: FontSize.lg, fontWeight: '800' },
   nameRow: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
   nameInput: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, color: Colors.textPrimary, fontSize: FontSize.md, paddingHorizontal: Spacing.md, height: 44 },
-  sectionLabel: { color: Colors.textMuted, fontSize: FontSize.xs, fontWeight: '700', letterSpacing: 1, paddingHorizontal: Spacing.md, marginBottom: Spacing.xs },
-  slots: { flexDirection: 'row', paddingHorizontal: Spacing.md, gap: Spacing.xs, marginBottom: Spacing.sm },
-  slot: { flex: 1, backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.sm, padding: Spacing.xs, alignItems: 'center' },
-  slotActive: { borderColor: '#ffffff', borderWidth: 2 },
-  slotFilled: { borderColor: Colors.primary },
-  slotNum: { color: Colors.primary, fontSize: FontSize.xs, fontWeight: '800' },
-  slotUnit: { color: Colors.textPrimary, fontSize: 9, fontWeight: '600', textAlign: 'center' },
-  slotPos: { color: Colors.textMuted, fontSize: 8 },
-  instruction: { color: Colors.textSecondary, fontSize: FontSize.xs, paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
-  content: { flex: 1 },
-  boardWrap: { alignItems: 'center', marginBottom: Spacing.sm },
+
+  // Step 1 — pick
+  pickContent: { padding: Spacing.md, gap: Spacing.md },
+  stepHint: { color: Colors.textSecondary, fontSize: FontSize.sm, textAlign: 'center' },
+  pills: { flexDirection: 'row', gap: Spacing.sm, justifyContent: 'center', flexWrap: 'wrap' },
+  pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: Radius.full, borderWidth: 1, gap: 4 },
+  pillFilled: { backgroundColor: Colors.primary + '33', borderColor: Colors.primary },
+  pillEmpty: { backgroundColor: Colors.bgCard, borderColor: Colors.border },
+  pillTxt: { color: Colors.textPrimary, fontSize: FontSize.sm, fontWeight: '600' },
+  pillTxtEmpty: { color: Colors.textMuted },
+  pillX: { color: Colors.textMuted, fontSize: FontSize.sm },
+  roster: { gap: Spacing.sm },
+  unitCard: { backgroundColor: Colors.bgCard, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  unitCardSel: { borderColor: Colors.primary, backgroundColor: Colors.primary + '11' },
+  unitCardDim: { opacity: 0.4 },
+  unitCardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  unitName: { color: Colors.textPrimary, fontSize: FontSize.md, fontWeight: '700' },
+  unitStat: { color: Colors.textSecondary, fontSize: FontSize.sm, marginTop: 2 },
+  unitAbil: { color: Colors.textMuted, fontSize: FontSize.xs, marginTop: 4 },
+  checkBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  checkTxt: { color: '#fff', fontSize: FontSize.sm, fontWeight: '800' },
+
+  // Step 2 — place
+  placeContent: { padding: Spacing.md, gap: Spacing.md, alignItems: 'center' },
+  activeRow: { flexDirection: 'row', gap: Spacing.xs, flexWrap: 'wrap', justifyContent: 'center' },
+  activeChip: { paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgCard, alignItems: 'center', minWidth: 64 },
+  activeChipOn: { borderColor: '#fff', borderWidth: 2, backgroundColor: Colors.primary + '22' },
+  activeChipPlaced: { borderColor: Colors.success },
+  activeChipNum: { color: Colors.primary, fontSize: 10, fontWeight: '800' },
+  activeChipName: { color: Colors.textPrimary, fontSize: 10, fontWeight: '600' },
+  activeChipCheck: { color: Colors.success, fontSize: 10 },
+  boardWrap: { alignItems: 'center' },
   board: { borderWidth: 1, borderColor: Colors.border },
   boardRow: { flexDirection: 'row' },
   tile: { width: TILE_SIZE, height: TILE_SIZE, alignItems: 'center', justifyContent: 'center' },
   tileL: { backgroundColor: '#1a1a2e' },
   tileD: { backgroundColor: '#16213e' },
-  tileActive: { backgroundColor: Colors.primary + '55', borderWidth: 2, borderColor: '#fff' },
-  tileFilled: { backgroundColor: Colors.primary + '33' },
-  tileAvail: { backgroundColor: Colors.primaryDark + '88' },
-  tileDisabled: { backgroundColor: '#0a0a14' },
-  unitMark: { width: TILE_SIZE - 6, height: TILE_SIZE - 6, borderRadius: 4, borderWidth: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary + '44' },
-  unitLbl: { color: Colors.textPrimary, fontSize: 13, fontWeight: '800' },
-  unitNum: { color: Colors.primary, fontSize: 8, fontWeight: '700' },
-  boardHint: { color: Colors.textMuted, fontSize: 9, marginTop: 4 },
-  roster: { flexDirection: 'row', flexWrap: 'wrap', padding: Spacing.sm, gap: Spacing.xs },
-  unitCard: { width: '48%', backgroundColor: Colors.bgCard, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.border },
-  unitCardSel: { borderColor: Colors.primary, backgroundColor: Colors.primary + '11' },
-  unitName: { color: Colors.textPrimary, fontSize: FontSize.sm, fontWeight: '600' },
-  unitStat: { color: Colors.textMuted, fontSize: FontSize.xs, marginTop: 2 },
-  checkBadge: { position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
-  checkText: { color: Colors.textPrimary, fontSize: 10, fontWeight: '800' },
-  dupBadge: { position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
-  dupText: { color: Colors.textMuted, fontSize: 10 },
+  tileActive: { backgroundColor: Colors.primary + '66', borderWidth: 2, borderColor: '#fff' },
+  tileOther: { backgroundColor: Colors.primary + '33' },
+  tileDisabled: { backgroundColor: '#080812' },
+  unitDot: { width: TILE_SIZE - 6, height: TILE_SIZE - 6, borderRadius: 4, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary + '44' },
+  unitDotTxt: { color: Colors.textPrimary, fontSize: 13, fontWeight: '800' },
+  unitDotNum: { color: Colors.primary, fontSize: 8, fontWeight: '700' },
+  availDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.textMuted + '44' },
+  boardHint: { color: Colors.textMuted, fontSize: 10, marginTop: 4 },
+  activeInfo: { alignSelf: 'stretch', backgroundColor: Colors.bgCard, borderRadius: Radius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  activeInfoName: { color: Colors.textPrimary, fontSize: FontSize.sm, fontWeight: '600' },
+  activeInfoSub: { color: Colors.textSecondary, fontSize: FontSize.xs, marginTop: 2 },
 });
