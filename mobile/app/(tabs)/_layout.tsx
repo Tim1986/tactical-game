@@ -1,21 +1,13 @@
-import { useEffect } from "react";
-import { Tabs, router } from "expo-router";
-import { Text, View, ActivityIndicator } from "react-native";
-import { useAuthStore } from "../../src/store/authStore";
-import { Colors } from "../../src/components/theme";
+import { Redirect, Tabs } from 'expo-router';
+import { Text } from 'react-native';
+import { useAuthStore } from '../../src/store/authStore';
+import { Colors } from '../../src/components/theme';
 
 export default function TabsLayout() {
   const { user, isLoading } = useAuthStore();
 
-  useEffect(() => {
-    if (isLoading) return;
-    if (!user) router.replace('/(auth)/index');
-  }, [user, isLoading]);
-
-  // Render nothing while loading or if user is gone — prevents the flash
-  if (isLoading || !user) {
-    return <View style={{ flex: 1, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={Colors.primary} /></View>;
-  }
+  // If logged out, go straight to auth — no flash
+  if (!isLoading && !user) return <Redirect href="/(auth)/index" />;
 
   return (
     <Tabs screenOptions={{ headerShown: false, tabBarStyle: { backgroundColor: Colors.bgCard, borderTopColor: Colors.border }, tabBarActiveTintColor: Colors.primary, tabBarInactiveTintColor: Colors.textMuted }}>

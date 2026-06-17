@@ -1,16 +1,17 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, View, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '../src/store/authStore';
 import { registerPushToken } from '../src/api/client';
+import { Colors } from '../src/components/theme';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: true, shouldShowBanner: true, shouldShowList: true }),
 });
 
 export default function RootLayout() {
-  const { user, loadUser } = useAuthStore();
+  const { user, isLoading, loadUser } = useAuthStore();
 
   useEffect(() => { void loadUser(); }, []);
   useEffect(() => { if (user) void registerForPushNotifications(); }, [user]);
@@ -21,6 +22,16 @@ export default function RootLayout() {
     });
     return () => sub.remove();
   }, []);
+
+  // While checking auth state, show a blank screen — prevents any flash
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={Colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
