@@ -23,7 +23,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try { const result = await api.register(username, email, password); await saveTokens(result.tokens.accessToken, result.tokens.refreshToken); set({ user: result.user, isLoading: false }); }
     catch (err) { set({ error: err instanceof Error ? err.message : 'Registration failed', isLoading: false }); }
   },
-  logout: async () => { try { await api.logout(); } catch { } await clearTokens(); set({ user: null }); },
+  logout: async () => { set({ isLoading: true }); try { await api.logout(); } catch { } await clearTokens(); set({ user: null, isLoading: false }); },
   loadUser: async () => {
     set({ isLoading: true });
     try { const token = await api.getAccessToken(); if (!token) { set({ isLoading: false }); return; } const profile = await api.getMe(); set({ user: profile, isLoading: false }); }

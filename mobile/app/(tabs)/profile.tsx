@@ -1,6 +1,5 @@
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
 import { Button, Card } from '../../src/components/ui';
 import { Colors, Spacing, FontSize } from '../../src/components/theme';
@@ -9,17 +8,13 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
 
   const handleLogout = async () => {
-    const confirmed = Platform.OS === 'web'
+    const confirmed = typeof window !== 'undefined'
       ? window.confirm('Are you sure you want to log out?')
-      : true; // on mobile we'll use Alert separately if needed
-
+      : true;
     if (!confirmed) return;
+    // Just call logout — authStore sets isLoading:true then user:null,
+    // which triggers the <Redirect> in TabsLayout cleanly with no flash.
     await logout();
-    if (Platform.OS === 'web') {
-      window.location.href = '/';
-    } else {
-      router.replace('/(auth)/index');
-    }
   };
 
   const xpToNext = (user?.accountLevel ?? 1) * 200;
