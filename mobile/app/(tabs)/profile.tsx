@@ -1,17 +1,25 @@
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
 import { Button, Card } from '../../src/components/ui';
 import { Colors, Spacing, FontSize } from '../../src/components/theme';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
+
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => void logout() },
+      {
+        text: 'Log Out', style: 'destructive', onPress: async () => {
+          await logout();
+          router.replace('/(auth)/index');
+        }
+      },
     ]);
   };
+
   const xpToNext = (user?.accountLevel ?? 1) * 200;
   const curXp = ((user?.accountLevel ?? 1) - 1) * 200;
   return (
@@ -30,10 +38,13 @@ export default function ProfileScreen() {
         <View style={styles.xpBar}><View style={[styles.xpFill, { width: (Math.min(100, (curXp / xpToNext) * 100)) + '%' }]} /></View>
         <Text style={styles.xpText}>{curXp} / {xpToNext} XP</Text>
       </Card>
-      <View style={styles.footer}><Button title="Log Out" onPress={handleLogout} variant="ghost" size="lg" /></View>
+      <View style={styles.footer}>
+        <Button title="Log Out" onPress={handleLogout} variant="ghost" size="lg" />
+      </View>
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   header: { alignItems: 'center', padding: Spacing.xl },
