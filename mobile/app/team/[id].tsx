@@ -45,7 +45,11 @@ export default function TeamBuilderScreen() {
         getUnits().then(({ units }) => {
           const loaded = t.unitIds.map(uid => units.find(u => u.id === uid) ?? null);
           setPicked(loaded);
-          setPositions(DEFAULT_POSITIONS.map((p, i) => loaded[i] ? p : null));
+          // Use saved placement if it exists, otherwise use defaults
+          const savedPlacement = t.placement && t.placement.length === 4
+            ? t.placement
+            : DEFAULT_POSITIONS;
+          setPositions(savedPlacement.map((p, i) => loaded[i] ? p : null));
           setStep('place');
           setLoading(false);
         }).catch(() => setLoading(false));
@@ -70,7 +74,7 @@ export default function TeamBuilderScreen() {
   };
 
   const pickedCount = picked.filter(Boolean).length;
-  const canProceed  = pickedCount === TEAM_SIZE && teamName.trim().length > 0;
+  const canProceed  = pickedCount === TEAM_SIZE;
 
   const goToPlace = () => {
     if (!canProceed) return;

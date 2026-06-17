@@ -65,10 +65,10 @@ export async function getMe(): Promise<UserProfile> { return apiFetch<UserProfil
 export interface AbilityDef { id: string; slug: string; name: string; description: string; targetingType: string; range: number; areaRadius: number; cooldownTurns: number; }
 export interface UnitDef { id: string; slug: string; name: string; maxHealth: number; movementRange: number; abilities: string[]; passives: string[]; unlockLevel: number; assetKey: string; }
 export async function getUnits(): Promise<{ units: UnitDef[]; abilities: AbilityDef[] }> { return apiFetch("/units"); }
-export interface Team { id: string; userId: string; name: string; unitIds: [string, string, string, string]; isActive: boolean; createdAt: string; }
+export interface Team { id: string; userId: string; name: string; unitIds: [string, string, string, string]; placement: Array<{ x: number; y: number }>; isActive: boolean; createdAt: string; }
 export async function getTeams(): Promise<{ teams: Team[] }> { return apiFetch("/teams"); }
-export async function createTeam(name: string, unitIds: string[]): Promise<{ team: Team }> { return apiFetch("/teams", { method: "POST", body: JSON.stringify({ name, unitIds }) }); }
-export async function updateTeam(teamId: string, name: string, unitIds: string[]): Promise<{ team: Team }> { return apiFetch("/teams/" + teamId, { method: "PUT", body: JSON.stringify({ name, unitIds }) }); }
+export async function createTeam(name: string, unitIds: string[], placement: Array<{ x: number; y: number }>): Promise<{ team: Team }> { return apiFetch("/teams", { method: "POST", body: JSON.stringify({ name, unitIds, placement }) }); }
+export async function updateTeam(teamId: string, name: string, unitIds: string[], placement: Array<{ x: number; y: number }>): Promise<{ team: Team }> { return apiFetch("/teams/" + teamId, { method: "PUT", body: JSON.stringify({ name, unitIds, placement }) }); }
 export async function deleteTeam(teamId: string): Promise<void> { await apiFetch("/teams/" + teamId, { method: "DELETE" }); }
 export async function enterQueue(teamId: string): Promise<{ message: string; position: number }> { return apiFetch("/matchmaking/queue", { method: "POST", body: JSON.stringify({ teamId }) }); }
 export async function leaveQueue(): Promise<void> { await apiFetch("/matchmaking/queue", { method: "DELETE" }); }
