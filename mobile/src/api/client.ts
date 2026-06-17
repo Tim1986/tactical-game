@@ -31,8 +31,11 @@ export async function clearTokens(): Promise<void> {
 
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = await storeGet(REFRESH_TOKEN_KEY);
+  // FIX 1: Don't send a null refresh token to the server
+  if (!refreshToken) return null;
   try {
     const res = await fetch(API_BASE_URL + "/auth/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken }) });
+    if (!res.ok) return null;
     const data = await res.json() as { data: { tokens: { accessToken: string; refreshToken: string } } };
     await saveTokens(data.data.tokens.accessToken, data.data.tokens.refreshToken);
     return data.data.tokens.accessToken;
@@ -49,9 +52,15 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, retry = true
   if (res.status === 401 && retry) {
     const newToken = await refreshAccessToken();
     if (newToken) return apiFetch<T>(path, options, false);
+    // FIX 2: Clear stale tokens so the user isn't stuck in a broken state
+    await clearTokens();
     throw new ApiError("UNAUTHORIZED", "Session expired. Please log in again.");
   }
   const json = await res.json() as { success: boolean; data: T; error?: { code: string; message: string } };
+  // FIX 3: Surface API errors instead of silently returning undefined
+  if (!json.success && json.error) {
+    throw new ApiError(json.error.code, json.error.message);
+  }
   return json.data;
 }
 
