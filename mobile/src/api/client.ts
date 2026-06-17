@@ -89,4 +89,6 @@ export interface ChallengeResult { challengeId: string; opponentUsername: string
 export async function issueChallenge(opponentUsername: string, teamId: string): Promise<ChallengeResult> { return apiFetch<ChallengeResult>("/challenges", { method: "POST", body: JSON.stringify({ opponentUsername, teamId }) }); }
 export async function acceptChallenge(challengeId: string, teamId: string): Promise<{ matchId: string }> { return apiFetch("/challenges/" + challengeId + "/accept", { method: "POST", body: JSON.stringify({ teamId }) }); }
 export async function declineChallenge(challengeId: string): Promise<void> { await apiFetch("/challenges/" + challengeId + "/decline", { method: "POST" }); }
-export async function getChallenges(): Promise<{ challenges: Array<{ id: string; fromUserId: string; fromUsername: string; teamId: string; status: string; createdAt: string }> }> { return apiFetch("/challenges"); }
+export interface ChallengeItem { id: string; fromUserId: string; fromUsername: string; teamId: string; status: string; createdAt: string; expiresAt?: string; }
+export interface SentChallengeItem { id: string; toUserId: string; toUsername: string; teamId: string; status: string; matchId: string | null; createdAt: string; }
+export async function getChallenges(): Promise<{ challenges: ChallengeItem[]; sent: SentChallengeItem[] }> { return apiFetch("/challenges"); }
