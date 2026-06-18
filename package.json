@@ -1,0 +1,8 @@
+{
+  "name": "tactical-game-root",
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "private": true
+}
