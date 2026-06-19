@@ -7,7 +7,7 @@ export default function TabsLayout() {
   const { user, isLoading } = useAuthStore();
 
   // If logged out, go straight to auth — no flash
-  if (!isLoading && !user) return <Redirect href="/(auth)/index" />;
+  if (!isLoading && !user) return <Redirect href="/(auth)" />;
 
   return (
     <Tabs screenOptions={{ headerShown: false, tabBarStyle: { backgroundColor: Colors.bgCard, borderTopColor: Colors.border }, tabBarActiveTintColor: Colors.primary, tabBarInactiveTintColor: Colors.textMuted }}>

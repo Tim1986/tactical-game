@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/store/authStore';
 import { Button, Card } from '../../src/components/ui';
@@ -33,8 +33,7 @@ export default function ProfileScreen() {
       </View>
       <Card style={styles.levelCard}>
         <Text style={styles.levelLabel}>Level {user?.accountLevel ?? 1}</Text>
-        <View style={styles.xpBar}><View style={[styles.xpFill, { width: (Math.min(100, (curXp / xpToNext) * 100)) + '%' }]} /></View>
-        <Text style={styles.xpText}>{curXp} / {xpToNext} XP</Text>
+        <View style={styles.xpBar}><View style={[styles.xpFill, { width: `${Math.min(100, (curXp / xpToNext) * 100)}%` as DimensionValue }]} /></View>
       </Card>
       <View style={styles.footer}>
         <Button title="Log Out" onPress={handleLogout} variant="ghost" size="lg" />

@@ -189,5 +189,5 @@ const styles = StyleSheet.create({
   modalBox: { backgroundColor: Colors.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: Spacing.xl, gap: Spacing.sm, paddingBottom: Spacing.xxl },
   modalTitle: { color: Colors.textPrimary, fontSize: FontSize.xl, fontWeight: '800' },
   modalSub: { color: Colors.textSecondary, fontSize: FontSize.sm, marginBottom: Spacing.xs },
-  handleInput: { backgroundColor: Colors.surface ?? '#1a1a2e', color: Colors.textPrimary, fontSize: FontSize.md, padding: Spacing.md, borderRadius: 10, borderWidth: 1, borderColor: Colors.border ?? '#333355' },
+  handleInput: { backgroundColor: Colors.bgCard, color: Colors.textPrimary, fontSize: FontSize.md, padding: Spacing.md, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
 });

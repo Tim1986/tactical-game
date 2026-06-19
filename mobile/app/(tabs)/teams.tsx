@@ -44,7 +44,7 @@ export default function TeamsScreen() {
                   <Text style={styles.teamUnits}>{item.unitIds.length} units</Text>
                 </View>
                 <View style={styles.teamActions}>
-                  <TouchableOpacity onPress={() => router.push('/team/' + item.id)} style={styles.editBtn}>
+                  <TouchableOpacity onPress={() => router.push({ pathname: '/team/[id]', params: { id: item.id } })} style={styles.editBtn}>
                     <Text style={styles.editText}>Edit</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteBtn}>

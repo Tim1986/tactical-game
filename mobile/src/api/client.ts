@@ -64,7 +64,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, retry = true
   return json.data;
 }
 
-export interface AuthResult { user: { id: string; username: string; email: string; elo: number; accountLevel: number }; tokens: { accessToken: string; refreshToken: string }; }
+export interface AuthResult { user: { id: string; username: string; email: string; elo: number; accountLevel: number }; tokens: { accessToken: string; refreshToken: string }; team?: Team; }
 export async function register(username: string, email: string, password: string): Promise<AuthResult> { return apiFetch<AuthResult>("/auth/register", { method: "POST", body: JSON.stringify({ username, email, password }) }); }
 export async function login(usernameOrEmail: string, password: string): Promise<AuthResult> { return apiFetch<AuthResult>("/auth/login", { method: "POST", body: JSON.stringify({ usernameOrEmail, password }) }); }
 export async function logout(): Promise<void> { await apiFetch("/auth/logout", { method: "POST" }); }

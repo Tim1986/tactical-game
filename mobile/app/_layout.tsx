@@ -18,7 +18,7 @@ export default function RootLayout() {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, string>;
-      if (data.matchId) router.push('/match/' + data.matchId);
+      if (data.matchId) router.push({ pathname: '/match/[id]', params: { id: data.matchId } });
     });
     return () => sub.remove();
   }, []);

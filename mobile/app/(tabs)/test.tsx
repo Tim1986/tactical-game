@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Image, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Image, Animated, DimensionValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing, FontSize, Radius } from '../../src/components/theme';
 import { Button, Badge } from '../../src/components/ui';
@@ -456,6 +456,7 @@ const SPRITE_MAP: Record<string, Record<string, Record<FacingDir, any>>> = {
     p2: { s: require('../../assets/images/wizard_red_s.png'),  n: require('../../assets/images/wizard_red_n.png'),  e: require('../../assets/images/wizard_red_e.png'),  w: require('../../assets/images/wizard_red_w.png')  },
   },
 };
+const FALLBACK_SPRITE: Record<string, Record<FacingDir, any>> = SPRITE_MAP['fighter'];
 // Per-slug horizontal offset — kept for fine-tuning if needed, but zeroed out
 // now that all sprites are centered in their frame cells.
 const SPRITE_OFFSET_X: Record<string, number> = {};
@@ -1013,6 +1014,7 @@ export default function TestScreen() {
 
     // PRIORITY 1: Move or Charge
     if (sel && (mode === 'move' || mode === 'charge')) {
+      const selUnit = sel;
       const alreadyUsed = mode === 'move' ? sel.moved : sel.orangeUsed;
       if (!alreadyUsed && !tileUnit) {
         const d = mdist(sel.pos, { x, y });
@@ -1045,10 +1047,10 @@ export default function TestScreen() {
             const [{ step, dir }, ...rest] = steps;
             const { sx: toSx, sy: toSy } = tileScreenPos(step.x, step.y);
             // Update facing and trigger the correct foot for this step
-            setFacing(sel.id, dir);
+            setFacing(selUnit.id, dir);
             // Alternate left foot (frame 1) and right foot (frame 3) per step
-            triggerUnitAnimStep(sel.id, stepIndex);
-            Animated.timing(_unitAnimPos.get(sel.id)!, {
+            triggerUnitAnimStep(selUnit.id, stepIndex);
+            Animated.timing(_unitAnimPos.get(selUnit.id)!, {
               toValue: { x: toSx, y: toSy },
               duration: STEP_DURATION_MS,
               useNativeDriver: false,
@@ -1498,7 +1500,7 @@ export default function TestScreen() {
                 {isFrozen && <View style={{ position: 'absolute', bottom: 2, width: TILE * 0.7, height: 8, borderRadius: 999, backgroundColor: '#0088ff22', borderWidth: 2, borderColor: '#44aaffcc' }}/>}
                 <UnitFigure unitId={u.id} slug={u.slug} owner={u.owner} opacity={isUsed ? 0.45 : 1} cellSize={UNIT_CELL} />
                 <View style={{ position: 'absolute', top: 0, left: 4, right: 4, height: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 2 }}>
-                  <View style={{ width: ((u.hp / u.maxHp) * 100) + '%', height: '100%', borderRadius: 2, backgroundColor: u.hp / u.maxHp > 0.5 ? '#44dd44' : u.hp / u.maxHp > 0.25 ? '#ddaa00' : '#dd2222' }}/>
+                  <View style={{ width: `${(u.hp / u.maxHp) * 100}%` as DimensionValue, height: '100%', borderRadius: 2, backgroundColor: u.hp / u.maxHp > 0.5 ? '#44dd44' : u.hp / u.maxHp > 0.25 ? '#ddaa00' : '#dd2222' }}/>
                 </View>
                 {isFrozen && <View style={{ position: 'absolute', top: 6, right: 4 }}><Text style={{ fontSize: 12 }}>❄</Text></View>}
               </Animated.View>

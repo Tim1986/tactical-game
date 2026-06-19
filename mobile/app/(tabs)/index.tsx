@@ -77,7 +77,7 @@ export default function HomeScreen() {
       const result = await acceptChallenge(acceptingChallenge.id, selectedTeamId);
       setAcceptModal(false);
       await load();
-      router.push('/match/' + result.matchId);
+      router.push({ pathname: '/match/[id]', params: { id: result.matchId } });
     } catch (err) {
       setAcceptError(err instanceof Error ? err.message : 'Failed to accept');
     } finally { setAcceptLoading(false); }
@@ -232,7 +232,7 @@ function MatchCard({ match, myId }: { match: MatchSummary; myId: string }) {
   const isActive = match.status === 'active';
   const iWon = match.winnerId === myId;
   return (
-    <TouchableOpacity onPress={() => router.push('/match/' + match.id)}>
+    <TouchableOpacity onPress={() => router.push({ pathname: '/match/[id]', params: { id: match.id } })}>
       <Card style={[styles.matchCard, match.isMyTurn && styles.myTurnCard]}>
         <View style={styles.matchRow}>
           <View>
