@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-export const API_BASE_URL = 'https://tactical-game-production.up.railway.app';
+export const API_BASE_URL = 'https://tactical-game-backend-production.up.railway.app';
 
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
