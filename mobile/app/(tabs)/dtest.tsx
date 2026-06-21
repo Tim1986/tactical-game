@@ -1462,6 +1462,8 @@ export default function TestScreen() {
                       backgroundColor: fill,
                       borderWidth: 0.5,
                       borderColor: ISO_EDGE,
+                      // @ts-ignore
+                      transform: [{ rotate: '-45deg' }],
                     }}
                   >
                     {/* Hover highlight — subtle brightness lift */}
