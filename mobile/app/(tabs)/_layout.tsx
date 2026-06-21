@@ -16,6 +16,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="teams" options={{ title: "Teams", tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 12, fontWeight: "700" }}>TEAMS</Text> }} />
       <Tabs.Screen name="play" options={{ title: "Play", tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 12, fontWeight: "700" }}>PLAY</Text> }} />
       <Tabs.Screen name="test" options={{ title: "Test", tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 12, fontWeight: "700" }}>TEST</Text> }} />
+      <Tabs.Screen name="dtest" options={{ title: "DTest", tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 12, fontWeight: "700" }}>DTEST</Text> }} />
       <Tabs.Screen name="profile" options={{ title: "Profile", tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 12, fontWeight: "700" }}>ME</Text> }} />
     </Tabs>
   );
