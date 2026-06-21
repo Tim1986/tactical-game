@@ -152,6 +152,7 @@ npx expo start --web
 - No web production domain yet — CORS will need updating when one exists
 - `npm audit` has 9 low-risk items deliberately left unresolved (see Security notes above)
 - Diagonal sprite art: Rogue is the test class. SW/SE/NW/NE contact+passing walk pairs done; 4 diagonal idle poses prompted but not yet generated/confirmed as of last session
+- Combat poses (Rogue): south windup+release (forward underhand thrust) DONE and confirmed good. North windup DONE but more symmetric/less ideal than south version (accepted as-is). North release NOT yet attempted. Flinch and dodge poses NOT yet attempted (prompts drafted, not run). See section 11 for the full working prompt formula and failure modes before attempting more combat poses.
 - DTest board rotation is proven to work visually but not yet integrated with any real diagonal sprite art — next step is wiring Rogue's diagonal images into a sprite map for DTest and visually validating before deciding whether to commit to diagonal board orientation game-wide
 
 ---
@@ -186,3 +187,33 @@ Full validated prompt text for all of the above lives in this conversation's his
 - `tileScreenPos()` in `dtest.tsx` rotates `(gx, gy)` -45° (this reads as counter-clockwise visually, despite earlier intent to do clockwise — Tim confirmed counter-clockwise looks correct and to leave it as-is) around board center before applying the existing tilt-compression math
 - Individual tile `View` elements also get `rotate: '-45deg'` applied directly so the square tiles themselves render as diamonds matching the rotated grid (without this, tiles stayed axis-aligned squares at rotated positions, creating a "basket weave" visual bug — this was caught and fixed same session)
 - **Status as of last session:** rotation and tile-shape fix both confirmed visually correct by Tim. No diagonal sprite art wired in yet — DTest currently shows existing (non-diagonal) sprites misaligned on the rotated board, which is expected/intentional until Rogue's diagonal art is ready to swap in.
+
+---
+
+## 11. Combat pose generation (windup/strike/flinch/dodge)
+
+**Status as of last session:** Rogue's forward-underhand-stab windup + release pair is done and confirmed good for south-facing. North-facing (back-view) windup is done but has a more symmetric/less dramatic stance than the south version — accepted as good enough rather than continuing to iterate. Release pose for north not yet attempted. Flinch and dodge poses not yet attempted (prompts were drafted earlier in this session but not yet run).
+
+### The core lesson: deviation size from idle predicts success
+
+Poses that stay mechanically close to the idle stance (small arm movements, grip unchanged from idle) generate reliably in 1-2 attempts. Poses that require large deviations from idle (arms raised overhead, reverse grip, dramatic repositioning) are prone to severe, compounding drift — grip flips, handle shape changes, even facial/skin-tone drift — that does NOT reliably fix with follow-up correction prompts, even narrow ones repeated multiple times.
+
+**Concrete example:** An overhead reverse-grip strike (windup + release) was attempted at length and abandoned after ~8 rounds of regeneration with no clean result — grip kept flipping back to pinky-side, dagger handles kept reverting to a bulbous pommel shape unlike the reference, even after providing the idle image directly as a visual grip reference. Pivoted instead to a forward underhand thrust (smaller deviation, grip matches idle exactly) and got a clean result in 2 attempts.
+
+**Takeaway for future pose work:** When picking new attack/reaction poses, prefer ones where the grip and general arm position are close to idle. If a pose requires a dramatically different arm position from idle, expect more iteration and consider whether a smaller-deviation alternative would serve the same gameplay/animation purpose.
+
+### The prompt formula that actually works
+
+1. **Always generate fresh from the idle reference image**, never patch/correct a previous generation more than once. If a correction attempt fails, don't try a third narrow correction — go back to idle and regenerate the whole pose with the failed detail stated as the primary, first instruction.
+2. **Lead with the most failure-prone detail as the first instruction**, not an afterthought at the end. E.g. "Grip (most important detail): ..." stated before describing the pose itself.
+3. **Anchor grip/style instructions to the idle reference image explicitly** ("identical to how she holds the daggers in this idle reference image"), not just abstract language like "thumb-side grip" alone.
+4. **End with an explicit self-check instruction**: "Before finalizing, check that the blade comes from the top/thumb-side of the fist on both hands, and that the handle shape matches the idle reference exactly." This measurably helped.
+5. **For back-view (north-facing) poses mirroring a front-view (south-facing) pose**, attach BOTH the north idle image AND the south-facing pose image together, and describe the specific leg/arm asymmetry literally (e.g. "one leg extended forward and out, the other tucked under — NOT symmetrical") rather than just saying "mirror this pose." Even with this, asymmetric leg positioning has been the hardest single detail to transfer reliably — north-facing windup ended up more symmetric than its south counterpart despite two attempts at correction; this was accepted as good enough rather than continuing to iterate.
+6. **For violent/combat poses, use literal sports/mechanical vocabulary, not violence-adjacent language.** Windup/release framed as a pitcher's windup/follow-through or a fencing lunge; flinch framed as "startled recoil, balance recovery" not "getting hit"; dodge framed as an athletic sidestep. Explicitly state "no visible injury, blood, or damage" for flinch poses. This has not caused any content-filter issues so far.
+7. **For dual-wielded grip-symmetry**, explicitly state "both daggers must point toward the same single target/point, not splayed to two separate points" — early forward-thrust attempts drifted toward stabbing two different implied targets, which read wrong even though the grip itself was correct.
+
+### Known failure modes (don't repeat these mistakes)
+
+- **Follow-up "fix this" prompts in the same generation thread tend to regenerate the whole image from scratch**, not edit just the flagged detail — sometimes reverting other correct details, sometimes ignoring the fix entirely and returning a near-duplicate of the original flawed image. Always start a fresh prompt/generation rather than conversationally iterating on one image.
+- **A specific pose archetype (deep crouch, both arms raised/cocked symmetrically) has a strong default bias toward a reverse/pinky-side grip** in this model, regardless of explicit instruction to the contrary. If you need a thumb-side/thrusting grip, the pose's overall silhouette may need to be different enough to avoid triggering this default (e.g., the successful forward-thrust windup uses a lower, more forward-leaning crouch rather than the symmetric raised-arms shape that kept defaulting to reverse grip).
+- **Background transparency can silently regress** even when not mentioned in a correction prompt — always re-state "transparent background" explicitly in every single prompt, every time, never assume it'll carry over from a reference image.
