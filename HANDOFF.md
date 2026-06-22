@@ -98,6 +98,30 @@ A tactical RPG with a mobile frontend (React Native/Expo) and a Node.js/Express 
 
 ## 7. Session log
 
+### 2026-06-22 (session 3) — Rogue sprite generation complete
+
+All Rogue combat and animation poses are now generated. Full pose set for Rogue:
+- **Idle:** S, N, SW, SE, NW, NE
+- **Walk cycle (contact + passing):** SW, SE, NW, NE
+- **Windup (forward underhand stab):** S, N, SW, SE, NW, NE
+- **Strike (follow-through):** S, N, SW, SE, NW, NE
+- **Flinch/recoil:** S, N, SW, SE, NW, NE
+- **Dodge:** S, N, SW, SE, NW, NE
+
+Key prompt lessons learned this session:
+- Abstract compass language ("rotate toward southwest") produces no meaningful rotation — model recreates the base pose. Fix: use concrete screen-position language ("lower-left corner of the frame") same as the proven walk-cycle formula.
+- Two-image combination (pose + angle reference) can overwrite the pose with the angle. Fix: add "Image 1's pose takes priority" OR use single-image with explicit pose-preservation language. Single-image worked better for back-view diagonal flinch.
+- Back-view (north-derived) diagonal poses are consistently harder — facial expression that carries body language is hidden. Accept "good enough" rather than over-iterating.
+- Dodge poses were the easiest — minimal drift, all 6 directions generated cleanly on first or second attempt.
+- Gender drift happened once on a north-diagonal correction. Fix: add "same female character — do not change body type, face structure, or hair" explicitly.
+
+**Next step:** start a new chat, upload all Rogue images, wire them into the sprite pipeline in code.
+
+### 2026-06-19/20 (session 2) — DTest page + diagonal sprite pipeline + combat pose starts
+- Validated 2-step diagonal walk cycle generation method
+- Built DTest page with 45° rotated board (see section 10)
+- Started Rogue combat pose generation — south/north windup and strike confirmed good
+
 ### 2026-06-19 (session 1) — Backend migration & deploy debugging
 - Migrated backend from nested-repo setup (inside `Tim1986/tactical-game`) to standalone `tactical-game-backend` repo to fix a Railway snapshot-size issue
 - Spent significant time debugging a silent server crash on deploy — root cause was an orphaned `railway.toml` overriding all dashboard config (see Gotcha #1)
@@ -217,3 +241,89 @@ Poses that stay mechanically close to the idle stance (small arm movements, grip
 - **Follow-up "fix this" prompts in the same generation thread tend to regenerate the whole image from scratch**, not edit just the flagged detail — sometimes reverting other correct details, sometimes ignoring the fix entirely and returning a near-duplicate of the original flawed image. Always start a fresh prompt/generation rather than conversationally iterating on one image.
 - **A specific pose archetype (deep crouch, both arms raised/cocked symmetrically) has a strong default bias toward a reverse/pinky-side grip** in this model, regardless of explicit instruction to the contrary. If you need a thumb-side/thrusting grip, the pose's overall silhouette may need to be different enough to avoid triggering this default (e.g., the successful forward-thrust windup uses a lower, more forward-leaning crouch rather than the symmetric raised-arms shape that kept defaulting to reverse grip).
 - **Background transparency can silently regress** even when not mentioned in a correction prompt — always re-state "transparent background" explicitly in every single prompt, every time, never assume it'll carry over from a reference image.
+
+---
+
+## 12. Sprite pipeline — from individual images to in-game sprites
+
+**Context:** Rogue's full pose set is now generated as individual PNG files (transparent background). The next step is wiring these into the game code. This section documents what needs to happen and what the existing sprite system looks like.
+
+### Current sprite system (test.tsx / dtest.tsx)
+
+Sprites are organized in `SPRITE_MAP` in `app/(tabs)/test.tsx`:
+
+```typescript
+const SPRITE_MAP: Record<string, Record<string, Record<FacingDir, any>>> = {
+  rogue: {
+    p1: { s: require('...'), n: require('...'), e: require('...'), w: require('...') },
+    p2: { s: require('...'), n: require('...'), e: require('...'), w: require('...') },
+  },
+  // other classes...
+}
+type FacingDir = 's' | 'n' | 'e' | 'w';
+```
+
+This was the original 4-direction (N/S/E/W) system for the non-diagonal board. For the diagonal board (DTest), new directions are needed: SW, SE, NW, NE. The `FacingDir` type and `SPRITE_MAP` structure will need to be extended.
+
+### What Rogue's image set covers
+
+Rogue has images for **6 directions**: S, N, SW, SE, NW, NE (no pure E or W since the board is diagonal).
+
+For each direction, the following **pose types** exist:
+- **Idle** — standing neutral pose (1 image per direction)
+- **Walk** — 2-frame cycle: contact pose + passing pose (2 images per direction × 4 diagonal directions only — S/N walk not generated since units only move diagonally on the rotated board)
+- **Windup** — attack windup (1 image per direction)
+- **Strike** — attack follow-through (1 image per direction)
+- **Flinch** — recoil/hit reaction (1 image per direction)
+- **Dodge** — evasive sidestep (1 image per direction)
+
+### Image sizing and consistency
+
+The individual generated images are **large, high-resolution PNGs** (approximately 1000×1300px range, portrait orientation). Before wiring into the app:
+
+1. **All images for a given class need to be normalized to the same pixel dimensions** — each image may have slightly different canvas sizes since they were generated independently. The character should be roughly the same height in each image.
+2. **The existing sprite system scales sprites to `UNIT_CELL = 56px`** in the game view — the actual image resolution doesn't matter as long as aspect ratios are consistent, since React Native scales the image. However inconsistent aspect ratios will make the character appear to shift size between animation frames.
+3. **Check for consistent "feet anchor point"** — the existing `build_strip.py` script (in the backend repo, not the mobile repo) was built to normalize foot position across frames for the original sprite sheet format. This may or may not be reusable for the new diagonal pose set.
+
+### Asset file naming convention (proposed)
+
+Since the new system has 6 directions and multiple pose types, a clear naming convention is essential. Suggested:
+
+```
+rogue_red_s_idle.png
+rogue_red_s_windup.png
+rogue_red_s_strike.png
+rogue_red_s_flinch.png
+rogue_red_s_dodge.png
+rogue_red_sw_idle.png
+rogue_red_sw_walk1.png   (contact pose)
+rogue_red_sw_walk2.png   (passing pose)
+rogue_red_sw_windup.png
+rogue_red_sw_strike.png
+rogue_red_sw_flinch.png
+rogue_red_sw_dodge.png
+... (repeat for se, nw, ne, n)
+```
+
+Blue versions (p2) follow the same pattern with `blue` instead of `red`.
+
+### Code changes needed for diagonal sprite support
+
+1. **Extend `FacingDir`** in `dtest.tsx`:
+   ```typescript
+   type FacingDir = 's' | 'n' | 'sw' | 'se' | 'nw' | 'ne';
+   ```
+
+2. **Extend `SPRITE_MAP`** to include all pose types, not just idle/walk. Current structure only has one image per direction per player. New structure needs to support pose-specific images. Exact data structure TBD — discuss with Claude in the next session before implementing, since this is a meaningful architectural decision that affects animation logic.
+
+3. **Animation state machine** — the game will need logic to decide which pose image to show based on game state (idle, walking, attacking, being hit, dodging). This doesn't exist yet and will need to be designed alongside the sprite structure.
+
+4. **`build_strip.py`** — the Python script that assembles individual pose images into sprite strips may need updating or replacement for the new pose set format. Ask Claude to look at the existing script before deciding.
+
+### Recommended approach for next session
+
+1. Upload all Rogue images to Claude
+2. Ask Claude to look at the existing `SPRITE_MAP` and `UnitFigure` component in `dtest.tsx` before proposing any structural changes
+3. Agree on a data structure for the extended sprite map (poses + directions) before writing any code
+4. Start with just wiring up **idle + walk** for one direction (e.g. SW) end-to-end to validate the pipeline works before doing all directions/all poses
+5. Visual validation in DTest before committing the full set
